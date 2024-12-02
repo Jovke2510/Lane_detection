@@ -37,13 +37,14 @@ You're reading it!
 
 Camera calibration was performed using the calibrate_camera function. Chessboard images from the specified directory were used to find object points and image points. OpenCV's cv2.calibrateCamera() function was used to compute the camera matrix and distortion coefficients.
 
-TODO: add an image
+![undistort_calibration](https://github.com/user-attachments/assets/6033c59a-1370-4b1b-8dab-8003cf9105df)
+
 
 ### Pipeline (single images)
 
 #### 1. Provide an example of a distortion-corrected image.
 
-![undistort](https://github.com/user-attachments/assets/9ba2adec-5c05-4cf9-ad9e-d77ea18f9c8e)
+![undistort](https://github.com/user-attachments/assets/a9a96e18-1f61-496b-b328-83bc04d3597a)
 
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
@@ -58,8 +59,8 @@ hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS) //hls transform
 combined_binary = cv2.bitwise_or(sobel_binary, s_binary) //combining sobel edge detection and isolated hls bright colors 
 ```
  
+![binary_th](https://github.com/user-attachments/assets/a58d5cbc-9f71-4531-a70a-60ccef10d020)
 
-![binary_th](https://github.com/user-attachments/assets/ded66850-8d86-40da-9df9-7d178eab733f)
 
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
@@ -80,7 +81,7 @@ Minv = cv2.getPerspectiveTransform(dst, src) //computing inverse transformation 
 warped = cv2.warpPerspective(img, M, (w, h))
 ```
 
-![perspective_warp](https://github.com/user-attachments/assets/b4e81884-07e0-44d7-a18c-2cbff7d5ca5d)
+![perspective_warp](https://github.com/user-attachments/assets/388ad3e0-ae21-4af6-8ab2-c3b5a385b88c)
 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
@@ -123,22 +124,33 @@ right_fit = np.polyfit(righty, rightx, 2)
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-TODO: Add your text here!!!
+The radius of curvature and vehicle offset are calculated in calculate_curvature_and_offset() function. Using real-world scale factors (ym_per_pix = 30/720, xm_per_pix = 3.7/700), polynomials are refitted to the lane lines in meters. The curvature formula is applied to both lanes, and their average is used as the final curvature. The vehicle offset is determined by comparing the lane center to the image center, scaled by xm_per_pix.
+
+```
+ym_per_pix, xm_per_pix = 30/720, 3.7/700 #defining pixel/meter scaling
+
+left_fit_cr = np.polyfit(ploty * ym_per_pix, (left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]) *        xm_per_pix, 2)
+right_fit_cr = np.polyfit(ploty * ym_per_pix, (right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]) *  xm_per_pix, 2) #reffiting polynomials in meters
+
+curvature = ((1 + (2 * left_fit_cr[0] * np.max(ploty) * ym_per_pix + left_fit_cr[1]) ** 2) ** 1.5) / np.abs(2 * left_fit_cr[0]) #calculating curvature
+offset = ((binary_warped.shape[1] / 2 - (left_fit[0] * np.max(ploty)**2 + left_fit[1] * np.max(ploty) + left_fit[2])) * xm_per_pix) #calculating offset
+   
+```
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-![output_image](https://github.com/user-attachments/assets/5ee45231-7191-4079-ac03-1351b2dc414b)
+![output_image](https://github.com/user-attachments/assets/e38c43a8-4348-4ba1-82a0-8312e486f30a)
 
 
 ### Pipeline (video)
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-https://youtu.be/kgV9QEtHT6U
+https://youtu.be/rzr9b8m0Bws
 
 ### Discussion
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-TODO: Add your text here!!!
+The pipeline struggled in bad lighting conditions as well as sharp turns, and especially in the combination of both. The most likely place it would fail is edge detection and thresholding due to bad lighting or bad weather conditions which could make lines more occluded or not recognizable leading to bad lane detection. Improvements could be made by using algorithms like adaptive thresholding that could handle bad lighting conditions better.
 
