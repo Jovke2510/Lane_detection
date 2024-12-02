@@ -41,15 +41,18 @@ TODO: Add your text here!!!
 
 #### 1. Provide an example of a distortion-corrected image.
 
-TODO: Add your text here!!!
+![undistort](https://github.com/user-attachments/assets/9ba2adec-5c05-4cf9-ad9e-d77ea18f9c8e)
+
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-TODO: Add your text here!!!
+![binary_th](https://github.com/user-attachments/assets/ded66850-8d86-40da-9df9-7d178eab733f)
+
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-TODO: Add your text here!!!
+![perspective_warp](https://github.com/user-attachments/assets/b4e81884-07e0-44d7-a18c-2cbff7d5ca5d)
+
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
@@ -61,13 +64,14 @@ TODO: Add your text here!!!
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-TODO: Add your text here!!!
+![output_image](https://github.com/user-attachments/assets/5ee45231-7191-4079-ac03-1351b2dc414b)
+
 
 ### Pipeline (video)
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-TODO: Add your text here!!!
+https://youtu.be/kgV9QEtHT6U
 
 ### Discussion
 
