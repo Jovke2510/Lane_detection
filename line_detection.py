@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 import glob
-import os
 
 # Camera calibration
 def calibrate_camera(calibration_images_path, chessboard_size=(9, 6)):
@@ -66,7 +65,7 @@ def perspective_transform(img):
     return warped, M, Minv
 
 def detect_lane_lines(binary_warped):
-    """Detects lane lines in a binary warped image."""
+    """Detects lane lines in a binary warped image and returns polynomial coefficients."""
     histogram = np.sum(binary_warped[binary_warped.shape[0] // 2:, :], axis=0)
 
     midpoint = np.int_(histogram.shape[0] / 2)
@@ -121,8 +120,35 @@ def detect_lane_lines(binary_warped):
 
     return left_fit, right_fit
 
-def draw_lane(original_img, binary_warped, left_fit, right_fit, Minv):
-    """Draws detected lanes on the original image."""
+def calculate_curvature_and_offset(binary_warped, left_fit, right_fit):
+    """Calculates the curvature of the lane and the vehicle's position with respect to the center."""
+    ploty = np.linspace(0, binary_warped.shape[0] - 1, binary_warped.shape[0])
+    y_eval = np.max(ploty)
+
+    # Real-world conversions (assumed: meters per pixel)
+    ym_per_pix = 30 / 720  # meters per pixel in y-dimension
+    xm_per_pix = 3.7 / 700  # meters per pixel in x-dimension
+
+    # Refit polynomials to real-world space
+    left_fit_cr = np.polyfit(ploty * ym_per_pix, (left_fit[0] * ploty**2 + left_fit[1] * ploty + left_fit[2]) * xm_per_pix, 2)
+    right_fit_cr = np.polyfit(ploty * ym_per_pix, (right_fit[0] * ploty**2 + right_fit[1] * ploty + right_fit[2]) * xm_per_pix, 2)
+
+    # Calculate curvature
+    left_curvature = ((1 + (2 * left_fit_cr[0] * y_eval * ym_per_pix + left_fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * left_fit_cr[0])
+    right_curvature = ((1 + (2 * right_fit_cr[0] * y_eval * ym_per_pix + right_fit_cr[1]) ** 2) ** 1.5) / np.absolute(2 * right_fit_cr[0])
+
+    # Average curvature
+    curvature = (left_curvature + right_curvature) / 2
+
+    # Vehicle offset from the center
+    lane_center = (left_fit[0] * y_eval**2 + left_fit[1] * y_eval + left_fit[2] + right_fit[0] * y_eval**2 + right_fit[1] * y_eval + right_fit[2]) / 2
+    vehicle_center = binary_warped.shape[1] / 2
+    offset = (vehicle_center - lane_center) * xm_per_pix
+
+    return curvature, offset
+
+def draw_lane(original_img, binary_warped, left_fit, right_fit, Minv, curvature, offset):
+    """Draws detected lanes and overlays curvature and offset information."""
     ploty = np.linspace(0, binary_warped.shape[0] - 1, binary_warped.shape[0])
     left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
     right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
@@ -137,6 +163,28 @@ def draw_lane(original_img, binary_warped, left_fit, right_fit, Minv):
     cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
     newwarp = cv2.warpPerspective(color_warp, Minv, (original_img.shape[1], original_img.shape[0]))
     result = cv2.addWeighted(original_img, 1, newwarp, 0.3, 0)
+
+    # Overlay curvature and offset
+    curvature_text = f"Radius of Curvature: {curvature:.2f}m"
+    offset_text = f"Vehicle Offset: {offset:.2f}m"
+    cv2.putText(result, curvature_text, (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+    cv2.putText(result, offset_text, (30, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+
+    return result
+
+def process_image(image_path, output_image_path, mtx, dist):
+    img = cv2.imread(image_path)
+    undistorted = undistort_image(img, mtx, dist)
+    cv2.imwrite("./output_images/undistort.jpg", undistorted)
+    binary = threshold_image(undistorted)
+    cv2.imwrite("./output_images/binary_th.jpg", binary)
+    binary_warped, M, Minv = perspective_transform(binary)
+    cv2.imwrite("./output_images/perspective_warp.jpg", binary_warped)
+    left_fit, right_fit = detect_lane_lines(binary_warped)
+    curvature, offset = calculate_curvature_and_offset(binary_warped, left_fit, right_fit)
+    result = draw_lane(undistorted, binary_warped, left_fit, right_fit, Minv, curvature, offset)
+    cv2.imwrite(output_image_path, result)
+
     return result
 
 def process_video_frame(frame, mtx, dist):
@@ -145,7 +193,8 @@ def process_video_frame(frame, mtx, dist):
     binary = threshold_image(undistorted)
     binary_warped, M, Minv = perspective_transform(binary)
     left_fit, right_fit = detect_lane_lines(binary_warped)
-    result = draw_lane(undistorted, binary_warped, left_fit, right_fit, Minv)
+    curvature, offset = calculate_curvature_and_offset(binary_warped, left_fit, right_fit)
+    result = draw_lane(undistorted, binary_warped, left_fit, right_fit, Minv, curvature, offset)
     return result
 
 def process_video(video_input_path, video_output_path, mtx, dist):
@@ -175,33 +224,64 @@ def process_video(video_input_path, video_output_path, mtx, dist):
     cap.release()
     out.release()
 
-def proccess_image(image_path, output_image_path, mtx, dist):
-    img = cv2.imread(image_path)
-    undistorted = undistort_image(img, mtx, dist)
-    binary = threshold_image(undistorted)
-    binary_warped, M, Minv = perspective_transform(binary)
-    left_fit, right_fit = detect_lane_lines(binary_warped)
-    result = draw_lane(undistorted, binary_warped, left_fit, right_fit, Minv)
-    cv2.imwrite(output_image_path, result)
 
-    return result
+    """Processes a video for lane detection and overlays curvature and vehicle offset."""
+    # Open the video file
+    cap = cv2.VideoCapture(video_input_path)
+    if not cap.isOpened():
+        raise IOError(f"Failed to open video file: {video_input_path}")
+
+    # Get video properties (frame size, frame rate)
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_rate = int(cap.get(cv2.CAP_PROP_FPS))
+
+    # Create video writer object for output video
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(video_output_path, fourcc, frame_rate, (frame_width, frame_height))
+
+    # Process each frame of the video
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        try:
+            # Undistort, threshold, warp, detect lanes, calculate curvature and offset
+            undistorted = undistort_image(frame, mtx, dist)
+            binary = threshold_image(undistorted)
+            binary_warped, M, Minv = perspective_transform(binary)
+            left_fit, right_fit = detect_lane_lines(binary_warped)
+            curvature, offset = calculate_curvature_and_offset(binary_warped, left_fit, right_fit)
+
+            # Draw lanes and overlay curvature and offset on the frame
+            result = draw_lane(undistorted, binary_warped, left_fit, right_fit, Minv, curvature, offset)
+
+            # Write the processed frame to output video
+            out.write(result)
+
+        except Exception as e:
+            print(f"Error processing frame: {e}")
+
+    # Release video capture and writer objects
+    cap.release()
+    out.release()
+
 
 # Paths and Initialization
 calibration_images_path = "./Zadatak/camera_cal/*.jpg"
-test_image_path = "./Zadatak/test_images/challange00101.jpg"
-output_image_path = "./output_image.jpg"
+test_image_path = "Zadatak/test_images/test3.jpg"
+output_image_path = "./output_images/output_image.jpg"
 test_video_path = "./Zadatak/test_videos/project_video03.mp4"
-output_video_path = "./output_video.mp4"
+output_video_path = "./output_images/output_video.mp4"
 
 # Calibration
 ret, mtx, dist = calibrate_camera(calibration_images_path)
 
 # Process Video
-# process_video(video_input_path, video_output_path, mtx, dist)
-# print(f"Video processing complete. Output saved to {video_output_path}.")
+process_video(test_video_path, output_video_path, mtx, dist)
+print(f"Video processing complete. Output saved to {output_video_path}.")
 
 # Process Images
-out_img = proccess_image(test_image_path, output_image_path, mtx, dist)
+out_img = process_image(test_image_path, output_image_path, mtx, dist)
 print(f"Image processing complete. Output saved to {output_image_path}.")
-cv2.imshow("Lane Detection", out_img)
-cv2.waitKey(5000)
